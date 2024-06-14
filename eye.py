@@ -283,6 +283,30 @@ def handle_all_messages(message):
         bot.reply_to(message, "هذا المستخدم غير مسجل بقاعدة بيانات البوت او ان الايدي خاطئ")
 
     check(user_id, name, username)
+def get_attempts(user_id):
+    with open(ATTEMPTS_FILE, 'r') as file:
+        for line in file:
+            uid, attempts = line.strip().split(',')
+            if int(uid) == user_id:
+                return int(attempts)
+    return None
+
+def add_user_attempts(user_id, attempts):
+    with open(ATTEMPTS_FILE, 'a') as file:
+        file.write(f"{user_id},{attempts}\n")
+
+def update_attempts(user_id, attempts):
+    lines = []
+    with open(ATTEMPTS_FILE, 'r') as file:
+        lines = file.readlines()
+
+    with open(ATTEMPTS_FILE, 'w') as file:
+        for line in lines:
+            uid, _ = line.strip().split(',')
+            if int(uid) == user_id:
+                file.write(f"{user_id},{attempts}\n")
+            else:
+                file.write(line)
 def process_add_attempts(message):
     try:
         user_id, attempts = map(int, message.text.split())
