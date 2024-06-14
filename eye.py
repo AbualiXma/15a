@@ -24,7 +24,7 @@ pr = Client(
 
 z = pytz.timezone('Asia/Baghdad')
 
-bot = telebot.TeleBot("7241156684:AAFZwVfdefYUvSHAAK8VgmlWx3WAl2uC5EQ")
+bot = telebot.TeleBot("7241156684:AAG276GS3EGnbeD-C_E_ddfgIBpVaZXuTz4")
 ATTEMPTS_FILE = 'attempts.txt'
 INITIAL_ATTEMPTS = 3
 sudo_id = 6214674757
