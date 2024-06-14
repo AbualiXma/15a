@@ -154,39 +154,37 @@ def check_subscription(user_id):
 def admin_panel(message):
     if message.from_user.id == sudo_id:
         keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton(text="Add Points to User", callback_data="add_points"))
-        keyboard.add(types.InlineKeyboardButton(text="Remove Points from User", callback_data="remove_points"))
-        keyboard.add(types.InlineKeyboardButton(text="Ban User", callback_data="ban_user"))
-        keyboard.add(types.InlineKeyboardButton(text="User Count", callback_data="user_count"))
-        keyboard.add(types.InlineKeyboardButton(text="Add Points to All", callback_data="add_points_all"))
-        keyboard.add(types.InlineKeyboardButton(text="Remove Points from All", callback_data="remove_points_all"))
+        keyboard.add(types.InlineKeyboardButton("Add Attempts to User", callback_data="add_attempts"))
+        keyboard.add(types.InlineKeyboardButton("Remove Attempts from User", callback_data="remove_attempts"))
+        keyboard.add(types.InlineKeyboardButton("Ban User", callback_data="ban_user"))
+        keyboard.add(types.InlineKeyboardButton("User Count", callback_data="user_count"))
+        keyboard.add(types.InlineKeyboardButton("Add Attempts to All", callback_data="add_attempts_all"))
+        keyboard.add(types.InlineKeyboardButton("Remove Attempts from All", callback_data="remove_attempts_all"))
         bot.send_message(message.chat.id, "Admin Panel", reply_markup=keyboard)
     else:
         bot.send_message(message.chat.id, "You are not authorized to use this command.")
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    if call.from_user.id == sudo_id:
-        if call.data == "add_points":
-            msg = bot.send_message(call.message.chat.id, "Send the user ID and points to add in format: user_id,points")
-            bot.register_next_step_handler(msg, process_add_points)
-        elif call.data == "remove_points":
-            msg = bot.send_message(call.message.chat.id, "Send the user ID and points to remove in format: user_id,points")
-            bot.register_next_step_handler(msg, process_remove_points)
-        elif call.data == "ban_user":
-            msg = bot.send_message(call.message.chat.id, "Send the user ID to ban")
-            bot.register_next_step_handler(msg, process_ban_user)
-        elif call.data == "user_count":
-            with open(ATTEMPTS_FILE, 'r') as file:
-                user_count = sum(1 for _ in file)
-            bot.send_message(call.message.chat.id, f"Total users: {user_count}")
-        elif call.data == "add_points_all":
-            msg = bot.send_message(call.message.chat.id, "Send the number of points to add to all users")
-            bot.register_next_step_handler(msg, process_add_points_all)
-        elif call.data == "remove_points_all":
-            msg = bot.send_message(call.message.chat.id, "Send the number of points to remove from all users")
-            bot.register_next_step_handler(msg, process_remove_points_all)
-
+    if call.data == "add_attempts":
+        msg = bot.send_message(call.message.chat.id, "Send user ID and number of attempts to add (e.g., 12345678 5):")
+        bot.register_next_step_handler(msg, process_add_attempts)
+    elif call.data == "remove_attempts":
+        msg = bot.send_message(call.message.chat.id, "Send user ID and number of attempts to remove (e.g., 12345678 5):")
+        bot.register_next_step_handler(msg, process_remove_attempts)
+    elif call.data == "ban_user":
+        msg = bot.send_message(call.message.chat.id, "Send user ID to ban:")
+        bot.register_next_step_handler(msg, process_ban_user)
+    elif call.data == "user_count":
+        user_count = sum(1 for line in open(ATTEMPTS_FILE))
+        bot.send_message(call.message.chat.id, f"Total Users: {user_count}")
+    elif call.data == "add_attempts_all":
+        msg = bot.send_message(call.message.chat.id, "Send number of attempts to add to all users (e.g., 5):")
+        bot.register_next_step_handler(msg, process_add_attempts_all)
+    elif call.data == "remove_attempts_all":
+        msg = bot.send_message(call.message.chat.id, "Send number of attempts to remove from all users (e.g., 5):")
+        bot.register_next_step_handler(msg, process_remove_attempts_all)
+        
 @Tho.message_handler(chat_types=["group","supergroup"])
 def groups(msg):
     idu:int = msg.from_user.id
@@ -360,5 +358,14 @@ def update_attempts(user_id, attempts):
                 file.write(f"{user_id},{attempts}\n")
             else:
                 file.write(line)
-
+def process_broadcast_message(message):
+    broadcast_text = message.text
+    with open(ATTEMPTS_FILE, 'r') as file:
+        for line in file:
+            user_id = int(line.strip().split(',')[0])
+            try:
+                bot.send_message(user_id, broadcast_text)
+            except:
+                continue
+    bot.send_message(message.chat.id, "Broadcast message sent to all users.")
 bot.polling(none_stop=True)
