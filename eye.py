@@ -2,13 +2,34 @@ import telebot
 from telebot import types
 import requests
 import json
+from telebot import TeleBot
+from kvsqlite.sync import Client
+from datetime import datetime
+import pytz
 
-bot = telebot.TeleBot("7241156684:AAHYjaOj_Xuc-0weajxW3JUwkJiHhjR1ZNo")
+db = Client(
+    "zang_mata.sqlite",
+    "users"
+    )
+
+chat = Client(
+    "zang_mata.sqlite",
+    "chats"
+    )
+
+pr = Client(
+    "zang_mata.sqlite",
+    "private"
+)
+
+z = pytz.timezone('Asia/Baghdad')
+
+bot = telebot.TeleBot("7297091826:AAHS3ataHFSipFykYzdyZBE_qnkYltkrohg")
 ATTEMPTS_FILE = 'attempts.txt'
 INITIAL_ATTEMPTS = 3
 sudo_id = 6214674757
 channels = ["-1002166116334"]
-
+Tho = bot
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.from_user.id
@@ -33,6 +54,60 @@ Wait...""".format(message.from_user.first_name, message.from_user.username), par
             contact_button = types.KeyboardButton(text="Send My Contact", request_contact=True)
             keyboard.add(contact_button)
             bot.send_message(chat_id=message.chat.id, text="Click on the “Send my Contact” button to activate the bot.", reply_markup=keyboard)
+            
+def check(idu:int,name:str,username:str) -> list:
+    d:str = str(datetime.now(z).date()).replace("-","/")
+    t:list = str(datetime.now(z).time()).split(".")[0].split(":")
+    h:int = int(t[0])
+    m:str = t[1]
+    s:str = t[2]
+    if h > 12:
+        h = h - 12
+        td:str = f"[{d} | {h}:{m}:{s} pm]"
+    else:
+        td:str = f"[{d} | {h}:{m}:{s} am]"
+    if not db.exists(f"user_{idu}"):
+        db.set(f"user_{idu}",{
+            "id":idu,
+            "last":{"name":name,"user_name":username},
+            "all":{
+                "user_names":[(username,td)],
+                "names":[(name,td)]
+            }
+        })
+        return ["new"]
+    else:
+        data:dict = db.get(f"user_{idu}")
+        name_old:str = data["last"]["name"]
+        username_old:str = data["last"]["user_name"]
+        if name_old != name and username_old != username:
+            all:dict = data["all"]
+            names:list = all["names"]
+            user_names:list = all["user_names"]
+            names.append((name,td))
+            user_names.append((username,td))
+            data["all"]["names"] = names
+            data["all"]["user_names"] = user_names
+            data["last"]["name"] = name
+            data["last"]["user_name"] = username
+            db.set(f"user_{idu}",data)
+            return ["both",name_old,username_old]
+        elif name_old != name:
+            all:dict = data["all"]
+            names:list = all["names"]
+            names.append((name,td))
+            data["all"]["names"] = names
+            data["last"]["name"] = name
+            db.set(f"user_{idu}",data)
+            return ["name",name_old]
+        elif username_old != username:
+            all:dict = data["all"]
+            user_names:list = all["user_names"]
+            user_names.append((username,td))
+            data["all"]["user_names"] = user_names
+            data["last"]["user_name"] = username
+            db.set(f"user_{idu}",data)
+            return ["username",username_old]
 
 @bot.message_handler(commands=['Getfile_ss123'])
 def send_file(message):
@@ -79,56 +154,76 @@ def check_subscription(user_id):
 def admin_panel(message):
     if message.from_user.id == sudo_id:
         keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton("Add Attempts to User", callback_data="add_attempts"))
-        keyboard.add(types.InlineKeyboardButton("Remove Attempts from User", callback_data="remove_attempts"))
-        keyboard.add(types.InlineKeyboardButton("Ban User", callback_data="ban_user"))
-        keyboard.add(types.InlineKeyboardButton("User Count", callback_data="user_count"))
-        keyboard.add(types.InlineKeyboardButton("Add Attempts to All", callback_data="add_attempts_all"))
-        keyboard.add(types.InlineKeyboardButton("Remove Attempts from All", callback_data="remove_attempts_all"))
-        keyboard.add(types.InlineKeyboardButton("Broadcast Message", callback_data="broadcast_message"))
+        keyboard.add(types.InlineKeyboardButton(text="Add Points to User", callback_data="add_points"))
+        keyboard.add(types.InlineKeyboardButton(text="Remove Points from User", callback_data="remove_points"))
+        keyboard.add(types.InlineKeyboardButton(text="Ban User", callback_data="ban_user"))
+        keyboard.add(types.InlineKeyboardButton(text="User Count", callback_data="user_count"))
+        keyboard.add(types.InlineKeyboardButton(text="Add Points to All", callback_data="add_points_all"))
+        keyboard.add(types.InlineKeyboardButton(text="Remove Points from All", callback_data="remove_points_all"))
         bot.send_message(message.chat.id, "Admin Panel", reply_markup=keyboard)
     else:
         bot.send_message(message.chat.id, "You are not authorized to use this command.")
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    if call.data == "add_attempts":
-        msg = bot.send_message(call.message.chat.id, "Send user ID and number of attempts to add (e.g., 12345678 5):")
-        bot.register_next_step_handler(msg, process_add_attempts)
-    elif call.data == "remove_attempts":
-        msg = bot.send_message(call.message.chat.id, "Send user ID and number of attempts to remove (e.g., 12345678 5):")
-        bot.register_next_step_handler(msg, process_remove_attempts)
-    elif call.data == "ban_user":
-        msg = bot.send_message(call.message.chat.id, "Send user ID to ban:")
-        bot.register_next_step_handler(msg, process_ban_user)
-    elif call.data == "user_count":
-        user_count = sum(1 for line in open(ATTEMPTS_FILE))
-        bot.send_message(call.message.chat.id, f"Total Users: {user_count}")
-    elif call.data == "add_attempts_all":
-        msg = bot.send_message(call.message.chat.id, "Send number of attempts to add to all users (e.g., 5):")
-        bot.register_next_step_handler(msg, process_add_attempts_all)
-    elif call.data == "remove_attempts_all":
-        msg = bot.send_message(call.message.chat.id, "Send number of attempts to remove from all users (e.g., 5):")
-        bot.register_next_step_handler(msg, process_remove_attempts_all)
-    elif call.data == "broadcast_message":
-        msg = bot.send_message(call.message.chat.id, "Send the message to broadcast to all users:")
-        bot.register_next_step_handler(msg, process_broadcast_message)
+    if call.from_user.id == sudo_id:
+        if call.data == "add_points":
+            msg = bot.send_message(call.message.chat.id, "Send the user ID and points to add in format: user_id,points")
+            bot.register_next_step_handler(msg, process_add_points)
+        elif call.data == "remove_points":
+            msg = bot.send_message(call.message.chat.id, "Send the user ID and points to remove in format: user_id,points")
+            bot.register_next_step_handler(msg, process_remove_points)
+        elif call.data == "ban_user":
+            msg = bot.send_message(call.message.chat.id, "Send the user ID to ban")
+            bot.register_next_step_handler(msg, process_ban_user)
+        elif call.data == "user_count":
+            with open(ATTEMPTS_FILE, 'r') as file:
+                user_count = sum(1 for _ in file)
+            bot.send_message(call.message.chat.id, f"Total users: {user_count}")
+        elif call.data == "add_points_all":
+            msg = bot.send_message(call.message.chat.id, "Send the number of points to add to all users")
+            bot.register_next_step_handler(msg, process_add_points_all)
+        elif call.data == "remove_points_all":
+            msg = bot.send_message(call.message.chat.id, "Send the number of points to remove from all users")
+            bot.register_next_step_handler(msg, process_remove_points_all)
 
-def process_add_attempts(message):
-    try:
-        user_id, attempts = map(int, message.text.split())
-        current_attempts = get_attempts(user_id)
-        if current_attempts is not None:
-            update_attempts(user_id, current_attempts + attempts)
-            bot.send_message(message.chat.id, f"Added {attempts} attempts to user {user_id}.")
-        else:
-            bot.send_message(message.chat.id, "User not found.")
-    except:
-        bot.send_message(message.chat.id, "Invalid input. Please send in the format: user_id attempts")
+@Tho.message_handler(chat_types=["group","supergroup"])
+def groups(msg):
+    idu:int = msg.from_user.id
+    name:str = msg.from_user.full_name
+    username:str = msg.from_user.username
+    chat_id:int = msg.chat.id
+    i = check(idu,name,username)
+    if i:
+        if i[0] == "name":
+            text:str = f"""هذا {idu}
+غير اسمه من {name} الى {i[1]}
+Its name has been changed from {name} to {i[1]}"""
+            Tho.send_message(chat_id,text)
+        elif i[0] == "username":
+            text:str = f"""هذا {idu}
+غير يوزره من {username} الى {i[1]}
+Its username has been changed from {username} to {i[1]}"""
+            Tho.send_message(chat_id,text)
+        elif i[0] == "both":
+            text:str = f"""هذا {idu}
+غير يوزر واسمه
+الاسم القديم : {i[1]}
+اليوزر القديم : {i[1]}
+this {idu}
+He changed his name
+Old name: {i[1]}
+Old user: {i[1]}"""
+            Tho.send_message(chat_id,text)
+    if not chat.exists(f"chat_{chat_id}"):
+        chat.set(f"chat_{chat_id}",chat_id)
+    return
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     user_id = message.from_user.id
+    name = message.from_user.full_name
+    username = message.from_user.username
 
     if check_subscription(user_id) or user_id == sudo_id:
         with open('pssj.txt', 'r') as file:
@@ -158,6 +253,34 @@ def handle_all_messages(message):
             bot.send_message(message.chat.id, "Ha, send your contact first thing, you can't search!")
     else:
         bot.send_message(message.chat.id, f"Please subscribe to the channels first: https://t.me/+P3wZHFJ-RKEyZDQ0")
+
+    iduu = message.text
+    if db.exists(f"user_{iduu}"):
+        data = db.get(f"user_{iduu}")["all"]
+        names_list = data["names"]
+        usernames_list = data["user_names"]
+        names = ""
+        usernames = ""
+        num = 0
+        for i in names_list:
+            num += 1
+            names += f"{num}. {i[1]} {i[0]}\n"
+        num = 0
+        for i in usernames_list:
+            num += 1
+            usernames += f"{num}. {i[1]} @{i[0]}\n"
+        text = f"""Ammmmmm
+{iduu}
+- Usernames
+{usernames}
+- Names
+{names}
+"""
+        bot.reply_to(message, text)
+    else:
+        bot.reply_to(message, "هذا المستخدم غير مسجل بقاعدة بيانات البوت او ان الايدي خاطئ")
+
+    check(user_id, name, username)
 
 def process_add_points(message):
     try:
@@ -237,15 +360,5 @@ def update_attempts(user_id, attempts):
                 file.write(f"{user_id},{attempts}\n")
             else:
                 file.write(line)
-def process_broadcast_message(message):
-    broadcast_text = message.text
-    with open(ATTEMPTS_FILE, 'r') as file:
-        for line in file:
-            user_id = int(line.strip().split(',')[0])
-            try:
-                bot.send_message(user_id, broadcast_text)
-            except:
-                continue
-    bot.send_message(message.chat.id, "Broadcast message sent to all users.")
-    
+
 bot.polling(none_stop=True)
