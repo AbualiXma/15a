@@ -149,7 +149,7 @@ def check_subscription(user_id):
         if req.get("result", {}).get("status") not in ['member', 'creator', 'administrator']:
             return False
     return True
-
+    
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
     if message.from_user.id == sudo_id:
@@ -160,6 +160,7 @@ def admin_panel(message):
         keyboard.add(types.InlineKeyboardButton("User Count", callback_data="user_count"))
         keyboard.add(types.InlineKeyboardButton("Add Attempts to All", callback_data="add_attempts_all"))
         keyboard.add(types.InlineKeyboardButton("Remove Attempts from All", callback_data="remove_attempts_all"))
+        keyboard.add(types.InlineKeyboardButton("Broadcast Message", callback_data="broadcast_message"))
         bot.send_message(message.chat.id, "Admin Panel", reply_markup=keyboard)
     else:
         bot.send_message(message.chat.id, "You are not authorized to use this command.")
@@ -184,6 +185,9 @@ def callback_query(call):
     elif call.data == "remove_attempts_all":
         msg = bot.send_message(call.message.chat.id, "Send number of attempts to remove from all users (e.g., 5):")
         bot.register_next_step_handler(msg, process_remove_attempts_all)
+    elif call.data == "broadcast_message":
+        msg = bot.send_message(call.message.chat.id, "Send the message to broadcast to all users:")
+        bot.register_next_step_handler(msg, process_broadcast_message)
         
 @Tho.message_handler(chat_types=["group","supergroup"])
 def groups(msg):
@@ -279,85 +283,61 @@ def handle_all_messages(message):
         bot.reply_to(message, "هذا المستخدم غير مسجل بقاعدة بيانات البوت او ان الايدي خاطئ")
 
     check(user_id, name, username)
-
-def process_add_points(message):
+def process_add_attempts(message):
     try:
-        user_id, points = map(int, message.text.split(','))
-        current_points = get_attempts(user_id) or 0
-        update_attempts(user_id, current_points + points)
-        bot.send_message(message.chat.id, f"Added {points} points to user {user_id}")
-    except ValueError:
-        bot.send_message(message.chat.id, "Invalid format. Please use: user_id,points")
+        user_id, attempts = map(int, message.text.split())
+        current_attempts = get_attempts(user_id)
+        if current_attempts is not None:
+            update_attempts(user_id, current_attempts + attempts)
+            bot.send_message(message.chat.id, f"Added {attempts} attempts to user {user_id}.")
+        else:
+            bot.send_message(message.chat.id, "User not found.")
+    except:
+        bot.send_message(message.chat.id, "Invalid input. Please send in the format: user_id attempts")
 
-def process_remove_points(message):
+def process_remove_attempts(message):
     try:
-        user_id, points = map(int, message.text.split(','))
-        current_points = get_attempts(user_id) or 0
-        update_attempts(user_id, max(0, current_points - points))
-        bot.send_message(message.chat.id, f"Removed {points} points from user {user_id}")
-    except ValueError:
-        bot.send_message(message.chat.id, "Invalid format. Please use: user_id,points")
+        user_id, attempts = map(int, message.text.split())
+        current_attempts = get_attempts(user_id)
+        if current_attempts is not None:
+            update_attempts(user_id, max(0, current_attempts - attempts))
+            bot.send_message(message.chat.id, f"Removed {attempts} attempts from user {user_id}.")
+        else:
+            bot.send_message(message.chat.id, "User not found.")
+    except:
+        bot.send_message(message.chat.id, "Invalid input. Please send in the format: user_id attempts")
 
 def process_ban_user(message):
     user_id = int(message.text)
-    with open('pssj.txt', 'r') as file:
-        lines = file.readlines()
-    with open('pssj.txt', 'w') as file:
-        for line in lines:
-            if f"ID:{user_id}," not in line:
-                file.write(line)
-    bot.send_message(message.chat.id, f"Banned user {user_id}")
+    update_attempts(user_id, 0)
+    bot.send_message(message.chat.id, f"User {user_id} has been banned.")
 
-def process_add_points_all(message):
+def process_add_attempts_all(message):
     try:
-        points = int(message.text)
+        attempts = int(message.text)
         with open(ATTEMPTS_FILE, 'r') as file:
             lines = file.readlines()
         with open(ATTEMPTS_FILE, 'w') as file:
             for line in lines:
-                user_id, current_points = map(int, line.strip().split(','))
-                file.write(f"{user_id},{current_points + points}\n")
-        bot.send_message(message.chat.id, f"Added {points} points to all users")
-    except ValueError:
-        bot.send_message(message.chat.id, "Invalid format. Please send the number of points to add.")
+                user_id, current_attempts = map(int, line.strip().split(','))
+                file.write(f"{user_id},{current_attempts + attempts}\n")
+        bot.send_message(message.chat.id, f"Added {attempts} attempts to all users.")
+    except:
+        bot.send_message(message.chat.id, "Invalid input. Please send the number of attempts.")
 
-def process_remove_points_all(message):
+def process_remove_attempts_all(message):
     try:
-        points = int(message.text)
+        attempts = int(message.text)
         with open(ATTEMPTS_FILE, 'r') as file:
             lines = file.readlines()
         with open(ATTEMPTS_FILE, 'w') as file:
             for line in lines:
-                user_id, current_points = map(int, line.strip().split(','))
-                file.write(f"{user_id},{max(0, current_points - points)}\n")
-        bot.send_message(message.chat.id, f"Removed {points} points from all users")
-    except ValueError:
-        bot.send_message(message.chat.id, "Invalid format. Please send the number of points to remove.")
+                user_id, current_attempts = map(int, line.strip().split(','))
+                file.write(f"{user_id},{max(0, current_attempts - attempts)}\n")
+        bot.send_message(message.chat.id, f"Removed {attempts} attempts from all users.")
+    except:
+        bot.send_message(message.chat.id, "Invalid input. Please send the number of attempts.")
 
-def get_attempts(user_id):
-    with open(ATTEMPTS_FILE, 'r') as file:
-        for line in file:
-            uid, attempts = line.strip().split(',')
-            if int(uid) == user_id:
-                return int(attempts)
-    return None
-
-def add_user_attempts(user_id, attempts):
-    with open(ATTEMPTS_FILE, 'a') as file:
-        file.write(f"{user_id},{attempts}\n")
-
-def update_attempts(user_id, attempts):
-    lines = []
-    with open(ATTEMPTS_FILE, 'r') as file:
-        lines = file.readlines()
-
-    with open(ATTEMPTS_FILE, 'w') as file:
-        for line in lines:
-            uid, _ = line.strip().split(',')
-            if int(uid) == user_id:
-                file.write(f"{user_id},{attempts}\n")
-            else:
-                file.write(line)
 def process_broadcast_message(message):
     broadcast_text = message.text
     with open(ATTEMPTS_FILE, 'r') as file:
